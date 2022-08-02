@@ -1,7 +1,0 @@
-/home/graphvite_mpi/build/CMakeFiles/glog.dir
-/home/graphvite_mpi/build/CMakeFiles/gflags.dir
-/home/graphvite_mpi/build/CMakeFiles/edit_cache.dir
-/home/graphvite_mpi/build/CMakeFiles/rebuild_cache.dir
-/home/graphvite_mpi/build/src/CMakeFiles/graphvite.dir
-/home/graphvite_mpi/build/src/CMakeFiles/edit_cache.dir
-/home/graphvite_mpi/build/src/CMakeFiles/rebuild_cache.dir

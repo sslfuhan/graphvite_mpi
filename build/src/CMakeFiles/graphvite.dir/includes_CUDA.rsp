@@ -1,1 +1,0 @@
--I/anaconda3/envs/graphvite_v3/include -I/anaconda3/envs/graphvite_v3/include/python3.6m -I/home/graphvite_mpi/build/glog/include -I/home/graphvite_mpi/build/gflags/include -I/home/install/faiss/include -I/home/graphvite_mpi/include -isystem=/usr/local/openmpi/include
