@@ -117,6 +117,13 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+#fuhan add mpi support
+option(GRAPHVITE_MPI "Build MPI support." ON)
+IF(GRAPHVITE_MPI)  #fuhan
+    add_definitions(-DGRAPHVITE_WITH_MPI)
+    message("hhhhhhh"${MPI_HOME})
+ENDIF(GRAPHVITE_MPI)
+
 # compilation flags
 set(CMAKE_CXX_FLAGS "-std=c++11 -Wall")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -Og")
@@ -146,3 +153,4 @@ execute_process(COMMAND ln -sf ${FAISS_LIBRARY} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(include)
 add_subdirectory(src)
+
