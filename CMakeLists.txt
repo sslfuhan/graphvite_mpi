@@ -22,6 +22,8 @@ find_package(GFlags)
 find_package(PythonLibsNew REQUIRED)
 find_package(pybind11 REQUIRED)
 
+#fuhan
+include_directories( ${pybind11_INCLUDE_DIRS} )
 # CUDA_ROOT & CUDA_ARCH
 get_filename_component(CUDA_ROOT ${CMAKE_CUDA_COMPILER} DIRECTORY)
 get_filename_component(CUDA_ROOT ${CUDA_ROOT} DIRECTORY)
@@ -46,7 +48,8 @@ endif()
 if (NOT GLOG_FOUND)
     message(WARNING "Can't find glog library. It will be installed from git repository.")
     ExternalProject_Add(glog
-            GIT_REPOSITORY      https://github.com/google/glog.git
+            GIT_REPOSITORY      git@github.com:google/glog.git
+            GIT_TAG             v0.4.0
             UPDATE_DISCONNECTED ${SKIP_UPDATE}
             PREFIX              glog
             SOURCE_DIR          ${EXTERNAL_DIR}/glog
@@ -69,7 +72,7 @@ endif ()
 if (NOT GFLAGS_FOUND)
     message(WARNING "Can't find gflags library. It will be installed from git repository.")
     ExternalProject_Add(gflags
-            GIT_REPOSITORY      https://github.com/gflags/gflags
+            GIT_REPOSITORY      git@github.com:gflags/gflags.git
             UPDATE_DISCONNECTED ${SKIP_UPDATE}
             PREFIX              gflags
             SOURCE_DIR          ${EXTERNAL_DIR}/gflags
@@ -91,7 +94,8 @@ endif()
 if (NOT FAISS_PATH)
     if (NOT NO_FAISS)
         ExternalProject_Add(faiss
-                GIT_REPOSITORY      https://github.com/facebookresearch/faiss.git
+                GIT_REPOSITORY      git@github.com:facebookresearch/faiss.git
+                GIT_TAG             v1.6.1
                 UPDATE_DISCONNECTED ${SKIP_UPDATE}
                 PREFIX              faiss
                 SOURCE_DIR          ${EXTERNAL_DIR}/faiss
@@ -108,7 +112,7 @@ if (NOT FAISS_PATH)
     endif()
 else()
     get_filename_component(FAISS_PARENT ${FAISS_PATH} DIRECTORY)
-    include_directories(${FAISS_PARENT})
+    include_directories(${FAISS_PARENT}/include)
     link_directories(${FAISS_PATH})
     set(FAISS_LIBRARY ${FAISS_PATH}/libfaiss.so)
 endif()
@@ -121,7 +125,6 @@ endif()
 option(GRAPHVITE_MPI "Build MPI support." ON)
 IF(GRAPHVITE_MPI)  #fuhan
     add_definitions(-DGRAPHVITE_WITH_MPI)
-    message("hhhhhhh"${MPI_HOME})
 ENDIF(GRAPHVITE_MPI)
 
 # compilation flags

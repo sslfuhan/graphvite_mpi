@@ -1,0 +1,1 @@
+cmd='test;-e;Makefile;&&;exit;||;cd;/home/graphvite_mpi/external/glog;&&;./autogen.sh;&&;cd;-;&&;/home/graphvite_mpi/external/glog/configure'

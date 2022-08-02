@@ -1,0 +1,21 @@
+# Hashes of file build rules.
+87eab13f8c1d93c4da6176d51fc72894 CMakeFiles/gflags
+d3c3e70ea3d747c634d8a6f8f53b237e CMakeFiles/gflags-complete
+87eab13f8c1d93c4da6176d51fc72894 CMakeFiles/glog
+e3c06fdcb758246fdc3e0370827541bd CMakeFiles/glog-complete
+86b4287a148e4a0c5363fb7b8af28952 faiss/src/faiss-stamp/faiss-configure
+ee138fe030f0aa10ea717f0b8147433d faiss/src/faiss-stamp/faiss-download
+dfb006a6d473823906e5bbb8eb57868c faiss/src/faiss-stamp/faiss-mkdir
+a5b129b8930fa38c7c65a80be2997f90 faiss/src/faiss-stamp/faiss-patch
+d742926446fd2d54f8018432860ba803 gflags/src/gflags-stamp/gflags-build
+0a39d93d34e0518d389e2901af65d9ac gflags/src/gflags-stamp/gflags-configure
+2a6db8213e06be4ce71ddf1b9d875205 gflags/src/gflags-stamp/gflags-download
+e959ffb4cdd6ae95e3089ebd7bd77524 gflags/src/gflags-stamp/gflags-install
+d549d9dd6ef8b349555ebd0a9485c353 gflags/src/gflags-stamp/gflags-mkdir
+758e2ff51c7a8dd1605aaf5ced7793e1 gflags/src/gflags-stamp/gflags-patch
+9b4d7677e88a178fe58fee83e336b7e1 glog/src/glog-stamp/glog-build
+74f49089777ca83bf49dcb7c4a2f7049 glog/src/glog-stamp/glog-configure
+5dc3397f5a749ad95e2c0bf1a29028c3 glog/src/glog-stamp/glog-download
+f0251d127de97c337c5aec3f63a16705 glog/src/glog-stamp/glog-install
+348b85c8aa3976913b58250c884266fb glog/src/glog-stamp/glog-mkdir
+82cbee2eeb3f81f26cb9a403d7ff606f glog/src/glog-stamp/glog-patch

@@ -1,0 +1,1 @@
+cmd='test;-e;Makefile;||;cmake;/home/graphvite_mpi/external/gflags;-DCMAKE_INSTALL_PREFIX=/home/graphvite_mpi/build/gflags'

@@ -1,0 +1,40 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/graphvite_mpi/build/CMakeFiles/faiss"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/CMakeFiles/faiss.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/CMakeFiles/faiss-complete.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/faiss/src/faiss-stamp/faiss-build.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/faiss/src/faiss-stamp/faiss-configure.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/faiss/src/faiss-stamp/faiss-download.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/faiss/src/faiss-stamp/faiss-install.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/faiss/src/faiss-stamp/faiss-mkdir.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/faiss/src/faiss-stamp/faiss-patch.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"faiss"
+		],
+		"name" : "faiss"
+	}
+}

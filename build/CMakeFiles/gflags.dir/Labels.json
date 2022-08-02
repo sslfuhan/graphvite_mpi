@@ -1,0 +1,40 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/graphvite_mpi/build/CMakeFiles/gflags"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/CMakeFiles/gflags.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/CMakeFiles/gflags-complete.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/gflags/src/gflags-stamp/gflags-build.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/gflags/src/gflags-stamp/gflags-configure.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/gflags/src/gflags-stamp/gflags-download.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/gflags/src/gflags-stamp/gflags-install.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/gflags/src/gflags-stamp/gflags-mkdir.rule"
+		},
+		{
+			"file" : "/home/graphvite_mpi/build/gflags/src/gflags-stamp/gflags-patch.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"gflags"
+		],
+		"name" : "gflags"
+	}
+}

@@ -731,24 +731,24 @@ public:
             embedding = 0;
         //TODO:
 #ifdef GRAPHVITE_WITH_MPI
-        Char* recv_buff;
-#ifdef PINNED_MEMORY
-        CUDA_CHECK(cudaMallocHost(&recv_buff , vertex_embeddings->size() * sizeof(Vector)));
-#else
-        recv_buff = new Char[vertex_embeddings->size() * sizeof(Vector)];
-#endif
-        if(rank ==0)
-            memcpy(recv_buff,vertex_embeddings->data(),vertex_embeddings->size() * sizeof(Vector));
-        MPI_Bcast(recv_buff, vertex_embeddings->size() * sizeof(Vector), MPI_BYTE, 0, MPI_COMM_WORLD);
-        if(rank != 0)
-            memcpy(vertex_embeddings->data(),recv_buff,vertex_embeddings->size() * sizeof(Vector));
+//         Char* recv_buff;
+// #ifdef PINNED_MEMORY
+//         CUDA_CHECK(cudaMallocHost(&recv_buff , vertex_embeddings->size() * sizeof(Vector)));
+// #else
+//         recv_buff = new Char[vertex_embeddings->size() * sizeof(Vector)];
+// #endif
+//         if(rank ==0)
+//             memcpy(recv_buff,vertex_embeddings->data(),vertex_embeddings->size() * sizeof(Vector));
+//         MPI_Bcast(recv_buff, vertex_embeddings->size() * sizeof(Vector), MPI_BYTE, 0, MPI_COMM_WORLD);
+//         if(rank != 0)
+//             memcpy(vertex_embeddings->data(),recv_buff,vertex_embeddings->size() * sizeof(Vector));
         //danger but easy
-        //MPI_Bcast(vertex_embeddings->data(), vertex_embeddings->size() * sizeof(Vector), MPI_BYTE, 0, MPI_COMM_WORLD);
-#ifdef PINNED_MEMORY
-        CUDA_CHECK(cudaFreeHost(&recv_buff));
-#else
-        delete [] recv_buff;
-#endif
+        MPI_Bcast(vertex_embeddings->data(), vertex_embeddings->size() * sizeof(Vector), MPI_BYTE, 0, MPI_COMM_WORLD);
+// #ifdef PINNED_MEMORY
+//         CUDA_CHECK(cudaFreeHost(&recv_buff));
+// #else
+//         delete [] recv_buff;
+// #endif
 #endif
     }
 

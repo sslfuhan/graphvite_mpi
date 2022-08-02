@@ -673,7 +673,7 @@ public:
                 /**fuhan: if MPI were enable,each proc will only own one worker and num_worker will be num of size*/
                 //TODO: 
                 for(int i = 0;i<num_worker;++i)
-                    workers[i].Train(assignment[rank*num_worker+i].first,(assignment[rank*num_worker+i].second + assignment_offset) % num_partition)
+                    workers[i]->train(assignment[rank*num_worker+i].first,(assignment[rank*num_worker+i].second + assignment_offset) % num_partition);
 #endif
             }
             // todo:Mpi sync after train
@@ -1442,8 +1442,12 @@ public:
         std::vector<Index> none, *mapping = &none;
 
 #ifdef GRAPHVITE_WITH_MPI
-        Char* send_buff ,recv_buff;
-        Char *recv_mapping_buff;
+        int dim = embedding[0].dim;
+        int rank = solver->rank;
+        int size = solver->size;
+        char* send_buff;
+        char* recv_buff;
+        char *recv_mapping_buff;
         std::vector<Index> recv_mapping(mapping->size());
         //fuhan:make send buffer and recv buffer /
 #ifdef PINNED_MEMORY
@@ -1451,9 +1455,9 @@ public:
         CUDA_CHECK(cudaMallocHost(&recv_buff, embedding.count * dim * sizeof(Float)));
         CUDA_CHECK(cudaMallocHost(&recv_mapping_buff, mapping->size() * sizeof(Index)));
 #else
-        send_buff = new Char[embedding.count * dim * sizeof(Float)];
-        recv_buff = new Char[embedding.count * dim * sizeof(Float)];
-        recv_mapping_buff = new Char[mapping->size() * sizeof(Index)];
+        send_buff = new char[embedding.count * dim * sizeof(Float)];
+        recv_buff = new char[embedding.count * dim * sizeof(Float)];
+        recv_mapping_buff = new char[mapping->size() * sizeof(Index)];
 #endif
 #endif
         if (protocol & kHeadPartition)
@@ -1479,19 +1483,19 @@ public:
             //fuhan:sync gradient and update
 #else
 
-            int gradient_id 
-            for(int i = 0;i < size; i++){
+            int gradient_id;
+            for(int i = 0;i < solver->size; i++){
                 gradient_id = id;
                 MPI_Bcast(&gradient_id,1,MPI_INT,i,MPI_COMM_WORLD);
-                &global_embedding = *(solver->embeddings[gradient_id]); 
+                global_embedding = *(solver->embeddings[gradient_id]); 
                 auto &update_gradient = *gradients[gradient_id];
                 if(i==rank){
                     memcpy(recv_mapping_buff, mapping->data(), mapping->size()*sizeof(Index));
-                    memcpy(recv_buff , send_buff, embedding.count * dim * sizeof(Float))
+                    memcpy(recv_buff , send_buff, embedding.count * dim * sizeof(Float));
                 }
                 MPI_Bcast(recv_mapping_buff, mapping->size()*sizeof(Index), MPI_BYTE, i, MPI_COMM_WORLD);
                 MPI_Bcast(recv_buff, embedding.count * dim * sizeof(Float), MPI_BYTE, i, MPI_COMM_WORLD);
-                memcpy(recv_mapping.data(),recv_mapping,recv_mapping.size() * sizeof(Index));
+                memcpy(recv_mapping.data(),recv_mapping_buff,recv_mapping.size() * sizeof(Index));
                 update_gradient.copy(recv_buff,embedding.count);
                 update_gradient.scatter_sub(global_embedding, recv_mapping);
             }
@@ -1517,15 +1521,15 @@ public:
                 int gradient_id = id;
                 
                 MPI_Bcast(&gradient_id,1,MPI_INT,i,MPI_COMM_WORLD);
-                &global_moment = *(solver->moments[gradient_id]);
+                global_moment = *(solver->moments[gradient_id]);
                 auto &moment_gradient = *moments[gradient_id];
-                if(i==rank){
+                if(i==solver->rank){
                     memcpy(recv_buff, send_buff, moment_gradient[i].count * dim * sizeof(Float));
                     memcpy(recv_mapping_buff, mapping->data(), mapping->size()*sizeof(Index));
                 }
                 MPI_Bcast(recv_mapping_buff, mapping->size()*sizeof(Index), MPI_BYTE, i, MPI_COMM_WORLD);
                 MPI_Bcast(recv_buff, moment_gradient[i].count * dim * sizeof(Float), MPI_BYTE, i, MPI_COMM_WORLD);
-                memcpy(recv_mapping.data(),recv_mapping,recv_mapping.size()*sizeof(Index));
+                memcpy(recv_mapping.data(),recv_mapping_buff,recv_mapping.size() * sizeof(Index));
                 moment_gradient[i].copy(recv_buff, embedding.count);
                 moment_gradient[i].scatter(global_moment[i], recv_mapping);
                 }
@@ -1636,7 +1640,7 @@ public:
         for (int i = 0; i < solver->positive_reuse; i++)
             for (int j = 0; j < solver->episode_size; j++) {
                 batch.copy(&samples[j * batch_size], batch_size * kSampleSize);
-                train_batch(solver->batch_id+=size);
+                train_batch(solver->batch_id+=solver->size);
             }
     }
 

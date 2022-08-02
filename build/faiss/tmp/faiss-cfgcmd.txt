@@ -1,0 +1,1 @@
+cmd='test;-e;makefile.inc;||;/home/graphvite_mpi/external/faiss/configure;--with-cuda=/usr/local/cuda;--with-cuda-arch=-gencode arch=compute_60,code=sm_60'

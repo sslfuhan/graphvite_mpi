@@ -1,0 +1,1 @@
+  -L/home/graphvite_mpi/build/glog/.libs  -L/home/graphvite_mpi/build/gflags/lib  -L/home/install/faiss/lib  -Wl,-rpath,/home/graphvite_mpi/build/glog/.libs:/home/graphvite_mpi/build/gflags/lib:/home/install/faiss/lib:/usr/local/openmpi/lib -lpthread -lcurand -lglog -lfaiss /usr/local/openmpi/lib/libmpi.so -lcudadevrt -lcudart_static -lrt -lpthread -ldl 
