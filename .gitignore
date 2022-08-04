@@ -1,0 +1,14 @@
+# build
+/build/
+# log
+/log/
+#python install
+/python/build/
+/python/dist/
+/python/graphvite.egg-info/
+/python/graphvite/__pycache__/
+#sh
+cmake.sh
+envs.sh
+makerun.sh
+1.txt

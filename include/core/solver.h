@@ -45,6 +45,7 @@
 #ifdef GRAPHVITE_WITH_MPI
 #include <mpi.h>
 #endif
+
 namespace py = pybind11;
 
 namespace graphvite {
@@ -148,6 +149,9 @@ public:
 #ifdef GRAPHVITE_WITH_MPI
     //fuhan mpi 
     int size,rank;
+    //debug
+
+       
 #endif
 
 #define USING_SOLVER_MIXIN(type) \
@@ -191,6 +195,17 @@ public:
      */
     SolverMixin(std::vector<int> device_ids = {}, int num_sampler_per_worker = kAuto, size_t _gpu_memory_limit = kAuto) :
             gpu_memory_limit(_gpu_memory_limit), edge_table(-1), batch_id(0) {
+
+#ifdef GRAPHVITE_WITH_MPI
+
+        //fuhan: init size and rank
+        MPI_Comm_size(MPI_COMM_WORLD,&size);
+        MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+
+#endif
+//fuhan:now we use one card for one proc and set rank as device id just for debug
+//TODO:
+#ifndef GRAPHVITE_WITH_MPI
         if (device_ids.empty()) {
             CUDA_CHECK(cudaGetDeviceCount(&num_worker));
             CHECK(num_worker) << "No GPU devices found";
@@ -198,15 +213,24 @@ public:
                 device_ids.push_back(i);
         } else
             num_worker = device_ids.size();
-#ifdef GRAPHVITE_WITH_MPI
-        //fuhan: init size and rank
-        MPI_Comm_size(MPI_COMM_WORLD,&size);
-        MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+#else 
+//debug
+//TODO
+        if (device_ids.empty()) {
+            CUDA_CHECK(cudaGetDeviceCount(&num_worker));
+            CHECK(num_worker) << "No GPU devices found";
+            num_worker = 1;
+            device_ids.push_back(rank+1);
+        }else
+            num_worker = device_ids.size();
 #endif
-       
+//fuhan debug: num_divice:1,device_id:rank check
+        if (num_sampler_per_worker == kAuto){
+            int num_device;
+            CUDA_CHECK(cudaGetDeviceCount(&num_device));
+            num_sampler_per_worker = std::thread::hardware_concurrency() / std::max(num_device - 1,1);
+        }
         
-        if (num_sampler_per_worker == kAuto)
-            num_sampler_per_worker = std::thread::hardware_concurrency() / num_worker - 1;
         num_sampler = num_sampler_per_worker * num_worker;
         num_thread = num_worker + num_sampler;
         LOG_IF(WARNING, num_sampler > std::thread::hardware_concurrency())
@@ -214,6 +238,7 @@ public:
         if (gpu_memory_limit == kAuto) {
             gpu_memory_limit = GiB(32);
             size_t free_memory;
+            
             for (auto &&device_id : device_ids) {
                 CUDA_CHECK(cudaSetDevice(device_id));
                 CUDA_CHECK(cudaMemGetInfo(&free_memory, nullptr));
@@ -283,12 +308,21 @@ public:
 
     /** Determine the minimum number of partitions */
     virtual int get_min_partition() const {
+#ifndef GRAPHVITE_WITH_MPI
         if (num_worker == 1)
             return num_worker;
         if (tied_weights)
             return num_worker * 2;
         else
             return num_worker;
+#else
+        if (num_worker == 1)
+            return size*num_worker;
+        if (tied_weights)
+            return size*num_worker * 2;
+        else
+            return size*num_worker;
+#endif
     }
 
     /**
@@ -313,6 +347,7 @@ public:
         num_vertex = graph->num_vertex;
         num_edge = graph->num_edge;
         num_moment = optimizer.num_moment;
+
         num_partition = _num_partition;
         num_negative = _num_negative;
         batch_size = _batch_size;
@@ -325,6 +360,10 @@ public:
 
         // build embeddings & moments
         protocols = get_protocols();
+
+        //Debug: check protocols(check); 10,12
+        
+
         sampler_protocol = get_sampler_protocol();
         num_embedding = protocols.size();
         embeddings.resize(num_embedding);
@@ -399,11 +438,12 @@ public:
         // use shuffle partition to get unbiased moment estimation for global bindings
         shuffle_partition = !naive_parallel && (all & kGlobal) && num_moment > 0;
         assignment_offset = 0;
-
+        //debug : naive_parallel 0
+        
         if (!naive_parallel) {
             //TODO: sync head_partitions and tail_partitions
-            head_partitions = partition(graph->vertex_weights, num_partition);
-            tail_partitions = partition(graph->vertex_weights, num_partition);
+            head_partitions = partition(graph->vertex_weights, num_partition);//[1][1715255]
+            tail_partitions = partition(graph->vertex_weights, num_partition);//[1][1715255]
             head_partition_size = 0;
             tail_partition_size = 0;
             for (int i = 0; i < num_partition; i++) {
@@ -452,6 +492,7 @@ public:
         }
         while (expected_size > 0) {
             try {
+                //problem might be here
                 for (auto &&sample_pool : sample_pools) {
                     for (auto &&partition_pool : sample_pool)
                         for (auto &&pool : partition_pool)
@@ -538,7 +579,7 @@ public:
 #ifdef GRAPHVITE_WITH_MPI
         //fuhan: if MPI were enable,each proc will only own one card and num_worker will be num of size
         if(size>1)
-            temp_num_worker = size;
+            temp_num_worker *= size;
 #endif
         std::vector<std::vector<std::pair<int, int>>> schedule;
         std::vector<std::pair<int, int>> assignment(temp_num_worker);
@@ -629,9 +670,7 @@ public:
         if (!resume) {
             init_embeddings();
             init_moments();
-            /**fuhan:init diffs here*/
-            // init_embeddings_diff();
-            // init_moments_diff();
+
             batch_id = 0;
         }
         num_batch = batch_id + num_epoch * num_edge / batch_size;
@@ -656,13 +695,24 @@ public:
             pool_id ^= 1;
             if (shuffle_partition)
                 assignment_offset = (assignment_offset + 1) % num_partition;
+            LOG(WARNING)<<"NOW SAMPLINGING: "<<" "<<rank<<" "<<std::endl;
             for (int i = 0; i < num_sampler; i++)
                 sample_threads[i] = std::thread(sample_function, samplers[i], work_load * i,
                                                 std::min(work_load * (i + 1), num_sample));
+            LOG(WARNING)<<"SAMPLINGING END: "<<" "<<rank<<" "<<std::endl;
             for (auto &&assignment : schedule) {
 #ifndef GRAPHVITE_WITH_MPI
                 for (int i = 0; i < assignment.size(); i++){
-                
+                    //fuhan debug
+                std::stringstream dd;
+                    dd << "assignment_size: "<<assignment.size()<<"  "<<std::endl;
+                    dd << "schedule_size: "<<schedule.size()<<"  "<<std::endl; 
+                    dd << "assignment_offset: "<<assignment_offset<<"  "<<std::endl; 
+                    for(int i = 0;i<assignment.size();i++){
+                        dd << "assignment.first "<<assignment[i].first << " ,"<<"assignment.second "<<assignment[i].second<< std::endl;
+                    }
+                   
+                    LOG(WARNING)<<pretty::block(dd.str());
                     worker_threads[i] = std::thread(&Worker::train, workers[i],
                                                     assignment[i].first,
                                                     (assignment[i].second + assignment_offset) % num_partition);
@@ -672,23 +722,45 @@ public:
 #else
                 /**fuhan: if MPI were enable,each proc will only own one worker and num_worker will be num of size*/
                 //TODO: 
-                for(int i = 0;i<num_worker;++i)
-                    workers[i]->train(assignment[rank*num_worker+i].first,(assignment[rank*num_worker+i].second + assignment_offset) % num_partition);
+                // for(int i = 0;i<num_worker;++i)
+                //     workers[i]->train(assignment[rank*num_worker+i].first,(assignment[rank*num_worker+i].second + assignment_offset) % num_partition);
+                    LOG(WARNING)<<"NOW TRAINING"<<" "<<rank<<" "<<std::endl;
+//fuhan debug
+//head_partitions (1,1715255 )
+                    std::stringstream dd;
+                    dd << "assignment_size: "<<assignment.size()<<"  "<<std::endl;
+                    dd << "schedule_size: "<<schedule.size()<<"  "<<std::endl; 
+                    dd << "assignment_offset: "<<assignment_offset<<"  "<<std::endl; 
+                    for(int i = 0;i<assignment.size();i++){
+                        dd << "assignment.first "<<assignment[i].first << " ,"<<"assignment.second "<<assignment[i].second<< std::endl;
+                    }
+                   
+                    LOG(WARNING)<<pretty::block(dd.str());
+
+                    workers[0]->train(assignment[rank].first,(assignment[rank].second + assignment_offset) % num_partition);
+                    LOG(WARNING)<<"TRAINING FIN FOR ONE"<<" "<<rank<<" "<<std::endl;
 #endif
             }
             // todo:Mpi sync after train
-#ifndef GRAPHVITE_WITH_MPI
+
             {
                 Timer timer("Wait for sample threads");
+
                 for (auto &&thread : sample_threads)
                     thread.join();
             }
-#endif
+
         }
+#ifndef GRAPHVITE_WITH_MPI
         for (int i = 0; i < num_worker; i++)
             worker_threads[i] = std::thread(&Worker::write_back, workers[i]);
         for (auto &&thread : worker_threads)
             thread.join();
+#else
+//fuhan: for now, only one thread for each proc 
+//TODO:
+        workers[0]->write_back();
+#endif
     }
 
     /**
@@ -909,6 +981,7 @@ private:
      * @return partitioned indexes
      */
     static std::vector<std::vector<Index>> partition(const std::vector<Float> &weights, int num_partition) {
+        //debug:weight.size() num_nodes:1715255 / only one num_partition
         std::vector<Index> indexes(weights.size());
         for (Index i = 0; i < indexes.size(); i++)
             indexes[i] = i;
@@ -1441,6 +1514,11 @@ public:
         auto &gradient = *gradients[id];
         std::vector<Index> none, *mapping = &none;
 
+
+        if (protocol & kHeadPartition)
+            mapping = &head_global_ids;
+        if (protocol & kTailPartition)
+            mapping = &tail_global_ids;
 #ifdef GRAPHVITE_WITH_MPI
         int dim = embedding[0].dim;
         int rank = solver->rank;
@@ -1448,57 +1526,124 @@ public:
         char* send_buff;
         char* recv_buff;
         char *recv_mapping_buff;
-        std::vector<Index> recv_mapping(mapping->size());
-        //fuhan:make send buffer and recv buffer /
-#ifdef PINNED_MEMORY
-        CUDA_CHECK(cudaMallocHost(&send_buff, embedding.count * dim * sizeof(Float)));
-        CUDA_CHECK(cudaMallocHost(&recv_buff, embedding.count * dim * sizeof(Float)));
-        CUDA_CHECK(cudaMallocHost(&recv_mapping_buff, mapping->size() * sizeof(Index)));
-#else
-        send_buff = new char[embedding.count * dim * sizeof(Float)];
-        recv_buff = new char[embedding.count * dim * sizeof(Float)];
-        recv_mapping_buff = new char[mapping->size() * sizeof(Index)];
-#endif
-#endif
-        if (protocol & kHeadPartition)
-            mapping = &head_global_ids;
-        if (protocol & kTailPartition)
-            mapping = &tail_global_ids;
 
+        LOG(WARNING)<<"mapping->size(): "<<mapping->size()<<std::endl;
+        LOG(WARNING)<<"embedding.count: "<<embedding.count<<std::endl;
+        // recv_mapping.resize(mapping->size());
+        //fuhan:make send buffer and recv buffer /
+        #ifdef PINNED_MEMORY
+        CUDA_CHECK(cudaMallocHost(&send_buff, embedding.count * dim * sizeof(Float)));
+        #else
+        send_buff = new char[embedding.count * dim * sizeof(Float)];
+        #endif
+#endif
+        LOG(WARNING)<< "INPLACE:  " << (protocol & kInPlace)<<std::endl;
         if (protocol & kInPlace) {
             embedding.to_host();
+#ifndef GRAPHVITE_WITH_MPI
             embedding.scatter(global_embedding, *mapping);
+#else
+        int gradient_id;
+        size_t recv_mapping_size;
+        size_t recv_embedding_size;
+        std::vector<Index> recv_mapping;
+        for(int i = 0;i < solver->size; i++){
+                gradient_id = id;
+                recv_mapping_size = mapping->size();
+                recv_embedding_size = embedding.count;
+                MPI_Bcast(&gradient_id,1,MPI_INT,i,MPI_COMM_WORLD);
+                MPI_Bcast(&recv_mapping_size,sizeof(Index),MPI_BYTE,i,MPI_COMM_WORLD);
+                MPI_Bcast(&recv_embedding_size,sizeof(Index),MPI_BYTE,i,MPI_COMM_WORLD);
+                recv_mapping.resize(recv_mapping_size);
+#ifdef PINNED_MEMORY
+                
+                CUDA_CHECK(cudaMallocHost(&recv_buff, recv_embedding_size * dim * sizeof(Float)));
+                CUDA_CHECK(cudaMallocHost(&recv_mapping_buff, recv_mapping_size * sizeof(Index)));
+#else
+                
+                recv_buff = new char[recv_embedding_size * dim * sizeof(Float)];
+                recv_mapping_buff = new char[recv_embedding_size * sizeof(Index)];
+#endif
+                global_embedding = *(solver->embeddings[gradient_id]); 
+                auto &update_gradient = *gradients[gradient_id];
+                if(i==rank){
+                    memcpy(recv_mapping_buff, mapping->data(), mapping->size()*sizeof(Index));
+                    memcpy(recv_buff , embedding.host_ptr, embedding.count * dim * sizeof(Float));
+                }
+                MPI_Bcast(recv_mapping_buff, recv_mapping_size*sizeof(Index), MPI_BYTE, i, MPI_COMM_WORLD);
+                MPI_Bcast(recv_buff, recv_embedding_size * dim * sizeof(Float), MPI_BYTE, i, MPI_COMM_WORLD);
+                memcpy(recv_mapping.data(),recv_mapping_buff,recv_mapping.size() * sizeof(Index));
+                update_gradient.copy(recv_buff,recv_embedding_size);
+                update_gradient.scatter_sub(global_embedding, recv_mapping);
+#ifdef PINNED_MEMORY
+                // CUDA_CHECK(cudaFreeHost(send_buff));
+                CUDA_CHECK(cudaFreeHost(recv_buff));
+                CUDA_CHECK(cudaFreeHost(recv_mapping_buff));
+#else
+                delete [] recv_buff;
+                delete [] recv_mapping_buff;
+#endif
+                decltype(recv_mapping)().swap(recv_mapping);
+            }
+#endif
         }
         else {
+        LOG(WARNING)<<"UPDATING: "<<std::endl;
             gradient.copy(embedding);
             embedding.to_host();
             for (Index i = 0; i < embedding.count; i++){
                 gradient[i] -= embedding[i];
-#ifdef GRAPHVITE_WITH_MPI
-                memcpy(send_buff + (i * dim * sizeof(Float)), gradient[i].data, dim * sizeof(Float));
-#endif
             }
+        LOG(WARNING)<<"UPDATING END"<<std::endl;
 #ifndef GRAPHVITE_WITH_MPI
             gradient.scatter_sub(global_embedding, *mapping);
             //fuhan:sync gradient and update
 #else
-
+            memcpy(send_buff , gradient.host_ptr, embedding.count * dim * sizeof(Float));
+            LOG(WARNING)<<"SENDING: "<<std::endl;
             int gradient_id;
+            size_t recv_mapping_size;
+            size_t recv_embedding_size;
+            std::vector<Index> recv_mapping;
             for(int i = 0;i < solver->size; i++){
                 gradient_id = id;
+                recv_mapping_size = mapping->size();
+                recv_embedding_size = embedding.count;
                 MPI_Bcast(&gradient_id,1,MPI_INT,i,MPI_COMM_WORLD);
+                MPI_Bcast(&recv_mapping_size,sizeof(Index),MPI_BYTE,i,MPI_COMM_WORLD);
+                MPI_Bcast(&recv_embedding_size,sizeof(Index),MPI_BYTE,i,MPI_COMM_WORLD);
+                recv_mapping.resize(recv_mapping_size);
+#ifdef PINNED_MEMORY
+                
+                CUDA_CHECK(cudaMallocHost(&recv_buff, recv_embedding_size * dim * sizeof(Float)));
+                CUDA_CHECK(cudaMallocHost(&recv_mapping_buff, recv_mapping_size * sizeof(Index)));
+#else
+                
+                recv_buff = new char[recv_embedding_size * dim * sizeof(Float)];
+                recv_mapping_buff = new char[recv_embedding_size * sizeof(Index)];
+#endif
                 global_embedding = *(solver->embeddings[gradient_id]); 
                 auto &update_gradient = *gradients[gradient_id];
                 if(i==rank){
                     memcpy(recv_mapping_buff, mapping->data(), mapping->size()*sizeof(Index));
                     memcpy(recv_buff , send_buff, embedding.count * dim * sizeof(Float));
                 }
-                MPI_Bcast(recv_mapping_buff, mapping->size()*sizeof(Index), MPI_BYTE, i, MPI_COMM_WORLD);
-                MPI_Bcast(recv_buff, embedding.count * dim * sizeof(Float), MPI_BYTE, i, MPI_COMM_WORLD);
+                MPI_Bcast(recv_mapping_buff, recv_mapping_size*sizeof(Index), MPI_BYTE, i, MPI_COMM_WORLD);
+                MPI_Bcast(recv_buff, recv_embedding_size * dim * sizeof(Float), MPI_BYTE, i, MPI_COMM_WORLD);
                 memcpy(recv_mapping.data(),recv_mapping_buff,recv_mapping.size() * sizeof(Index));
-                update_gradient.copy(recv_buff,embedding.count);
+                update_gradient.copy(recv_buff,recv_embedding_size);
                 update_gradient.scatter_sub(global_embedding, recv_mapping);
+#ifdef PINNED_MEMORY
+                // CUDA_CHECK(cudaFreeHost(send_buff));
+                CUDA_CHECK(cudaFreeHost(recv_buff));
+                CUDA_CHECK(cudaFreeHost(recv_mapping_buff));
+#else
+                delete [] recv_buff;
+                delete [] recv_mapping_buff;
+#endif
+                decltype(recv_mapping)().swap(recv_mapping);
             }
+            LOG(WARNING)<<"SENDING END: "<<std::endl;
 #endif
             //todo: sync gradient
             // gradient.scatter_sub(global_embedding, *mapping);
@@ -1506,48 +1651,67 @@ public:
         }
         // only write back partitioned moments
         //TODO:
+        LOG(WARNING)<<"MOMENTING: "<<std::endl;
         if (solver->is_train && !(protocol & kGlobal)){
+#ifdef GRAPHVITE_WITH_MPI
+            int gradient_id;
+            int recv_mapping_size;
+            std::vector<Index> recv_mapping;
+#endif
             for (int i = 0; i < num_moment; i++) {
                 moment[i].to_host();
 #ifdef GRAPHVITE_WITH_MPI
+        LOG(WARNING)<<"COPYING: "<<std::endl;
                 for(int j = 0 ; j < moment[i].count; j++){
-                    memcpy(send_buff+(j * dim * sizeof(Float)),moment[i][j].data,dim * sizeof(Float));
+                    memcpy(send_buff+(j * dim * sizeof(Float)) , moment[i][j].data , dim * sizeof(Float));
                 }
 #endif
 #ifndef GRAPHVITE_WITH_MPI
                 moment[i].scatter(global_moment[i], *mapping);
 #else           
+        LOG(WARNING)<<"SYNCING: "<<std::endl;
                 for(int k = 0;k < size; k++){
-                int gradient_id = id;
-                
-                MPI_Bcast(&gradient_id,1,MPI_INT,i,MPI_COMM_WORLD);
+                gradient_id = id;
+                recv_mapping_size = mapping->size();
+                MPI_Bcast(&gradient_id,1,MPI_INT,k,MPI_COMM_WORLD);
+                MPI_Bcast(&recv_mapping_size,1,MPI_INT,k,MPI_COMM_WORLD);
+                recv_mapping.resize(recv_mapping_size);
+                #ifdef PINNED_MEMORY
+                CUDA_CHECK(cudaMallocHost(&recv_mapping_buff, mapping->size() * sizeof(Index)));
+                #else
+                recv_mapping_buff = new char[mapping->size() * sizeof(Index)];
+                #endif
                 global_moment = *(solver->moments[gradient_id]);
                 auto &moment_gradient = *moments[gradient_id];
                 if(i==solver->rank){
                     memcpy(recv_buff, send_buff, moment_gradient[i].count * dim * sizeof(Float));
                     memcpy(recv_mapping_buff, mapping->data(), mapping->size()*sizeof(Index));
                 }
-                MPI_Bcast(recv_mapping_buff, mapping->size()*sizeof(Index), MPI_BYTE, i, MPI_COMM_WORLD);
-                MPI_Bcast(recv_buff, moment_gradient[i].count * dim * sizeof(Float), MPI_BYTE, i, MPI_COMM_WORLD);
+                MPI_Bcast(recv_mapping_buff, mapping->size()*sizeof(Index), MPI_BYTE, k, MPI_COMM_WORLD);
+                MPI_Bcast(recv_buff, moment_gradient[i].count * dim * sizeof(Float), MPI_BYTE, k, MPI_COMM_WORLD);
                 memcpy(recv_mapping.data(),recv_mapping_buff,recv_mapping.size() * sizeof(Index));
                 moment_gradient[i].copy(recv_buff, embedding.count);
                 moment_gradient[i].scatter(global_moment[i], recv_mapping);
+                #ifdef PINNED_MEMORY
+                CUDA_CHECK(cudaFreeHost(recv_mapping_buff));
+                #else
+                delete [] recv_mapping_buff;
+                #endif
+                decltype(recv_mapping)().swap(recv_mapping);
                 }
 #endif
             }
         }
-
+        LOG(WARNING)<<"MOMENTING END: "<<std::endl;
 #ifdef GRAPHVITE_WITH_MPI
 #ifdef PINNED_MEMORY
         CUDA_CHECK(cudaFreeHost(send_buff));
-        CUDA_CHECK(cudaFreeHost(recv_buff));
-        CUDA_CHECK(cudaFreeHost(recv_mapping_buff));
 #else
         delete [] send_buff;
-        delete [] recv_buff;
-        delete [] recv_mapping_buff;
 #endif
 #endif
+
+LOG(WARNING)<<"DELETE END: "<<std::endl;
     }
 
     /**
@@ -1579,10 +1743,14 @@ public:
                 }
             }
             // we don't need to write back during prediction
+            // TODO: print hit[]
             if (solver->is_train)
                 for (int i = 0; i < num_embedding; i++)
-                    if (!hit[i])
+                    if (!hit[i]){
+                        LOG(WARNING)<<"WRITING EMBEDDING"<<std::endl;
                         write_embedding(i);
+                        LOG(WARNING)<<"WRITING EMBEDDING END"<<std::endl;
+                    }
         }
         bool sampler_hit = (sampler_protocol & kGlobal) && !cold_cache;
         sampler_hit = sampler_hit || ((sampler_protocol & kHeadPartition) && (sampler_protocol & kTailPartition)
@@ -1613,8 +1781,11 @@ public:
             negative_sampler.to_device_async();
         }
         for (int i = 0; i < num_embedding; i++)
-            if (!hit[i])
+            if (!hit[i]){
+                LOG(WARNING)<<"LOADING EMBEDDING"<<std::endl;
                 load_embedding(i);
+                LOG(WARNING)<<"LOADING EMBEDDING END"<<std::endl;
+            }
     }
 
     /** Write back all embeddings and their moment matrices from GPU cache */
@@ -1633,15 +1804,24 @@ public:
      */
     void train(int _head_partition_id, int _tail_partition_id) {
         CUDA_CHECK(cudaSetDevice(device_id));
+        #ifdef GRAPHVITE_WITH_MPI
+        std::stringstream dd;
+        dd<<solver->rank<<": "<<"head_partition_id: "<<_head_partition_id<<"tail_partition_id: "<<_tail_partition_id<<std::endl;
+        LOG(WARNING)<<pretty::block(dd.str());
+        #endif
         load_partition(_head_partition_id, _tail_partition_id);
 
         auto &samples = solver->sample_pools[solver->pool_id][head_partition_id][tail_partition_id];
         log_frequency = solver->log_frequency;
+        // LOG(WARNING) << " TRAINING:  "<<solver->rank<<" "<<std::endl;
         for (int i = 0; i < solver->positive_reuse; i++)
             for (int j = 0; j < solver->episode_size; j++) {
                 batch.copy(&samples[j * batch_size], batch_size * kSampleSize);
+                //fuhan
                 train_batch(solver->batch_id+=solver->size);
+                // train_batch(solver->batch_id++);
             }
+        // LOG(WARNING) << "TRAINING END:  "<<solver->rank<<" "<<std::endl;
     }
 
     /** Train a single batch */

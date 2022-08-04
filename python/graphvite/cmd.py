@@ -30,7 +30,9 @@ import numpy as np
 
 import graphvite as gv
 import graphvite.application as gap
-
+#fuhan
+import mpi4py
+from mpi4py import MPI
 
 def get_config_path():
     candidate_paths = [
@@ -268,6 +270,9 @@ command = {
 }
 
 def main():
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank ()
+    size = comm.Get_size () 
     parser = get_parser()
     args = parser.parse_args()
     command[args.command](args)

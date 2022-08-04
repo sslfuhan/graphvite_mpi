@@ -1,6 +1,6 @@
 # cmake
-glog
-gflags
+#glog
+#gflags
 pybind11
 
 # make
@@ -16,11 +16,11 @@ imageio
 psutil
 scipy
 #matplotlib
-pytorch::pytorch
-pytorch::torchvision
+#pytorch
+#torchvision
 nltk
 
 #cmake >=3.12
 #gxx_linux-64 >=5.4
 #cudatoolkit >=9.2
-#python
+python
