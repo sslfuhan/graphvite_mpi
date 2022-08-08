@@ -219,6 +219,19 @@ public:
             result[i] = v[i] * f;
         return result;
     }
+    //fuhan operator ==
+    bool operator ==(const Vector &v){
+
+        if(this->dim!=v.dim)
+            return false;
+#pragma unroll
+        for(Index i = 0; i < dim; i++){
+            if((*this)[i]!=v[i]){
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 } // namespace graphvite
