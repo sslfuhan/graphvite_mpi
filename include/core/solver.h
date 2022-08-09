@@ -746,30 +746,14 @@ namespace graphvite
                 pool_id ^= 1;
                 if (shuffle_partition)
                     assignment_offset = (assignment_offset + 1) % num_partition;
-                LOG(WARNING) << "NOW SAMPLINGING: "
-                             << " " << rank << " " << std::endl;
                 for (int i = 0; i < num_sampler; i++)
                     sample_threads[i] = std::thread(sample_function, samplers[i], work_load * i,
                                                     std::min(work_load * (i + 1), num_sample));
-                LOG(WARNING) << "SAMPLINGING END: "
-                             << " " << rank << " " << std::endl;
                 for (auto &&assignment : schedule)
                 {
 #ifndef GRAPHVITE_WITH_MPI
                     for (int i = 0; i < assignment.size(); i++)
                     {
-                        // fuhan debug
-                        std::stringstream dd;
-                        dd << "assignment_size: " << assignment.size() << "  " << std::endl;
-                        dd << "schedule_size: " << schedule.size() << "  " << std::endl;
-                        dd << "assignment_offset: " << assignment_offset << "  " << std::endl;
-                        for (int i = 0; i < assignment.size(); i++)
-                        {
-                            dd << "assignment.first " << assignment[i].first << " ,"
-                               << "assignment.second " << assignment[i].second << std::endl;
-                        }
-
-                        LOG(WARNING) << pretty::block(dd.str());
                         worker_threads[i] = std::thread(&Worker::train, workers[i],
                                                         assignment[i].first,
                                                         (assignment[i].second + assignment_offset) % num_partition);
@@ -781,25 +765,12 @@ namespace graphvite
                     // TODO:
                     //  for(int i = 0;i<num_worker;++i)
                     //      workers[i]->train(assignment[rank*num_worker+i].first,(assignment[rank*num_worker+i].second + assignment_offset) % num_partition);
-                    LOG(WARNING) << "NOW TRAINING"
-                                 << " " << rank << " " << std::endl;
+
                     // fuhan debug
                     // head_partitions (1,1715255 )
-                    std::stringstream dd;
-                    dd << "assignment_size: " << assignment.size() << "  " << std::endl;
-                    dd << "schedule_size: " << schedule.size() << "  " << std::endl;
-                    dd << "assignment_offset: " << assignment_offset << "  " << std::endl;
-                    for (int i = 0; i < assignment.size(); i++)
-                    {
-                        dd << "assignment.first " << assignment[i].first << " ,"
-                           << "assignment.second " << assignment[i].second << std::endl;
-                    }
-
-                    LOG(WARNING) << pretty::block(dd.str());
 
                     workers[0]->train(assignment[rank].first, (assignment[rank].second + assignment_offset) % num_partition);
-                    LOG(WARNING) << "TRAINING FIN FOR ONE"
-                                 << " " << rank << " " << std::endl;
+                    << " " << rank << " " << std::endl;
 #endif
                 }
                 // todo:Mpi sync after train
@@ -1648,7 +1619,6 @@ namespace graphvite
             send_buff = new char[embedding.count * sizeof(Vector)];
 #endif
 #endif
-            LOG(WARNING) << "INPLACE:  " << (protocol & kInPlace) << std::endl;
             if (protocol & kInPlace)
             {
                 embedding.to_host();
@@ -1716,7 +1686,6 @@ namespace graphvite
                 // fuhan:sync gradient and update
 #else
                 memcpy(send_buff, gradient.host_ptr, embedding.count * dim * sizeof(Float));
-                LOG(WARNING) << "SENDING: " << std::endl;
                 int gradient_id;
                 size_t recv_mapping_size;
                 Index recv_embedding_size;
@@ -1781,9 +1750,7 @@ namespace graphvite
 #ifndef GRAPHVITE_WITH_MPI
                     moment[i].scatter(global_moment[i], *mapping);
 #else
-                    LOG(WARNING) << "COPYING: " << std::endl;
                     memcpy(send_buff, moment[i].host_ptr, moment[i].count * sizeof(Vector));
-                    LOG(WARNING) << "SYNCING: " << std::endl;
                     for (int k = 0; k < size; k++)
                     {
                         gradient_id = id;
@@ -1873,9 +1840,7 @@ namespace graphvite
                     for (int i = 0; i < num_embedding; i++)
                         if (!hit[i])
                         {
-                            LOG(WARNING) << "WRITING EMBEDDING" << std::endl;
                             write_embedding(i);
-                            LOG(WARNING) << "WRITING EMBEDDING END" << std::endl;
                         }
             }
             bool sampler_hit = (sampler_protocol & kGlobal) && !cold_cache;
@@ -1910,9 +1875,7 @@ namespace graphvite
             for (int i = 0; i < num_embedding; i++)
                 if (!hit[i])
                 {
-                    LOG(WARNING) << "LOADING EMBEDDING" << std::endl;
                     load_embedding(i);
-                    LOG(WARNING) << "LOADING EMBEDDING END" << std::endl;
                 }
         }
 
@@ -1934,14 +1897,7 @@ namespace graphvite
         void train(int _head_partition_id, int _tail_partition_id)
         {
             CUDA_CHECK(cudaSetDevice(device_id));
-#ifdef GRAPHVITE_WITH_MPI
-            std::stringstream dd;
-            dd << solver->rank << ": "
-               << "head_partition_id: " << _head_partition_id << "tail_partition_id: " << _tail_partition_id << std::endl;
-            LOG(WARNING) << pretty::block(dd.str());
-#endif
             load_partition(_head_partition_id, _tail_partition_id);
-
             auto &samples = solver->sample_pools[solver->pool_id][head_partition_id][tail_partition_id];
             log_frequency = solver->log_frequency;
             // LOG(WARNING) << " TRAINING:  "<<solver->rank<<" "<<std::endl;
@@ -1953,7 +1909,6 @@ namespace graphvite
                     train_batch(solver->batch_id += solver->size);
                     // train_batch(solver->batch_id++);
                 }
-            // LOG(WARNING) << "TRAINING END:  "<<solver->rank<<" "<<std::endl;
         }
 
         /** Train a single batch */
@@ -2070,16 +2025,17 @@ namespace graphvite
             auto &global_moment = *(solver->moments[id]);
             int dim = global_embedding[0].dim;
             char *send_buff = new char[sizeof(Vector)];
+            MPI_Status status;
             for (const auto &embeddings : global_embedding)
             {
-                if (rank == 1)
+                if (solver->rank == 0)
                 {
                     memcpy(send_buff, &embeddings, sizeof(Vector));
                     MPI_Send(send_buff, dim * sizeof(Float), MPI_BYTE, 1, 0, MPI_COMM_WORLD);
                 }
                 else
                 {
-                    MPI_Recv(send_buff, dim * sizeof(Float), MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+                    MPI_Recv(send_buff, dim * sizeof(Float), MPI_BYTE, 0, 0, MPI_COMM_WORLD, &status);
                 }
                 Vector temp;
                 memcpy(&temp, send_buff, sizeof(Vector));
