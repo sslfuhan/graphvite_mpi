@@ -770,7 +770,7 @@ namespace graphvite
                     // head_partitions (1,1715255 )
 
                     workers[0]->train(assignment[rank].first, (assignment[rank].second + assignment_offset) % num_partition);
-                    << " " << rank << " " << std::endl;
+
 #endif
                 }
                 // todo:Mpi sync after train
