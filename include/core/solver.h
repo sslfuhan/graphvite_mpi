@@ -1932,12 +1932,15 @@ namespace graphvite
             // Loss (last batch)
             if (batch_id % log_frequency == 0)
             {
-                Timer timer("Loss", log_frequency);
-                loss.to_host();
-                Float batch_loss = 0;
-                for (int i = 0; i < batch_size; i++)
-                    batch_loss += loss[i];
-                LOG(INFO) << "loss = " << batch_loss / batch_size;
+                if (solver->rank == 0)
+                {
+                    Timer timer("Loss", log_frequency);
+                    loss.to_host();
+                    Float batch_loss = 0;
+                    for (int i = 0; i < batch_size; i++)
+                        batch_loss += loss[i];
+                    LOG(INFO) << "loss = " << batch_loss / batch_size;
+                }
             }
             // Train
             {
